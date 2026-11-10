@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">StandByMe</string>
+
+    <string name="tab_clock">Horloge</string>
+    <string name="tab_widgets">Widgets</string>
+    <string name="night_mode">Mode nuit</string>
+    <string name="settings">Réglages</string>
+
+    <string name="no_playback_title">Aucune lecture en cours</string>
+    <string name="no_playback_body">Lancez de la musique dans une application, puis revenez ici.</string>
+    <string name="now_playing_on">En lecture · %1$s</string>
+
+    <string name="perm_title">Autoriser l\'accès à la musique</string>
+    <string name="perm_body">StandByMe a besoin de l\'accès aux notifications pour afficher et contrôler ce qui joue actuellement, quelle que soit l\'application (Spotify, YouTube Music…). Cette autorisation se donne une seule fois dans les réglages système.</string>
+    <string name="perm_action">Ouvrir les réglages</string>
+    <string name="perm_later">Plus tard</string>
+
+    <string name="queue_title">File d\'attente</string>
+    <string name="queue_count">%1$d titres</string>
+    <string name="queue_unavailable">File d\'attente non fournie par l\'application en cours</string>
+
+    <string name="settings_apple_design">Design Apple</string>
+    <string name="settings_apple_design_hint">Arrière-plan flouté, commandes et animations façon StandBy d’Apple. Le halo et les vagues ne s’appliquent pas dans ce mode.</string>
+    <string name="settings_wave_intensity">Intensité des vagues</string>
+    <string name="settings_aura_enabled">Halo lumineux</string>
+    <string name="settings_aura_album_color">Couleur de la pochette</string>
+    <string name="settings_aura_intensity">Puissance du halo lumineux</string>
+
+    <string name="style_numeric">Numérique</string>
+    <string name="style_analog">Analogique</string>
+    <string name="style_solar">Solaire</string>
+    <string name="style_wave">Onde musicale</string>
+    <string name="sunrise_sunset">Lever %1$s · Coucher %2$s</string>
+
+    <string name="previous">Précédent</string>
+    <string name="next">Suivant</string>
+    <string name="play">Lecture</string>
+    <string name="pause">Pause</string>
+    <string name="volume">Volume</string>
+    <string name="output_picker">Choisir où la musique joue</string>
+    <string name="output_cast">Diffusion</string>
+    <string name="output_speaker">Haut-parleur</string>
+    <string name="output_bluetooth">Bluetooth</string>
+    <string name="output_wired">Casque filaire</string>
+    <string name="listening_on">Écoute sur %1$s</string>
+    <string name="listening_on_cast">Écoute sur un appareil Cast</string>
+</resources>
