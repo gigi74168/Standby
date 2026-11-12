@@ -9,6 +9,8 @@ build/
 .cxx
 *.apk
 *.aab
+# Exception : l'APK prêt à installer, rangé dans release/
+!/release/*.apk
 
 # Secrets de signature : ne jamais les commiter
 keystore.properties
