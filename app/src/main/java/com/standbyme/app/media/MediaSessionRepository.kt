@@ -36,6 +36,19 @@ class MediaSessionRepository(private val app: Application) {
     @Volatile
     private var activeController: MediaController? = null
 
+    private val cacheLock = Any()
+    private var cachedSessionToken: android.media.session.MediaSession.Token? = null
+    private var cachedKey: MetadataCacheKey? = null
+    private var cachedArt: Bitmap? = null
+
+    private data class MetadataCacheKey(
+        val packageName: String,
+        val title: String,
+        val artist: String,
+        val album: String,
+        val durationMs: Long,
+    )
+
     fun hasNotificationAccess(): Boolean =
         NotificationManagerCompat.getEnabledListenerPackages(app).contains(app.packageName)
 
@@ -175,20 +188,32 @@ class MediaSessionRepository(private val app: Application) {
     }
 
     private fun buildState(controller: MediaController?): PlaybackUiState {
-        if (controller == null) return PlaybackUiState(volumeFraction = systemVolumeFraction())
+        if (controller == null) {
+            synchronized(cacheLock) {
+                cachedSessionToken = null
+                cachedKey = null
+                cachedArt = null
+            }
+            return PlaybackUiState(volumeFraction = systemVolumeFraction())
+        }
 
+        val packageName = controller.packageName.orEmpty()
         val metadata = controller.metadata
         val playback = controller.playbackState
 
         val appLabel = try {
             val pm = app.packageManager
-            pm.getApplicationLabel(pm.getApplicationInfo(controller.packageName, 0)).toString()
+            pm.getApplicationLabel(pm.getApplicationInfo(packageName, 0)).toString()
         } catch (_: Exception) {
-            controller.packageName.orEmpty()
+            packageName
         }
 
-        val art: Bitmap? = metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
-            ?: metadata?.getBitmap(MediaMetadata.METADATA_KEY_ART)
+        val (title, artist, album, durationMs, art) = resolveMetadataAndArtwork(
+            token = controller.sessionToken,
+            packageName = packageName,
+            metadata = metadata,
+            playbackState = playback?.state,
+        )
 
         val activeQueueId = playback?.activeQueueItemId ?: -1L
         val queue = controller.queue.orEmpty().mapNotNull { item ->
@@ -206,18 +231,18 @@ class MediaSessionRepository(private val app: Application) {
 
         return PlaybackUiState(
             hasSession = true,
-            packageName = controller.packageName.orEmpty(),
+            packageName = packageName,
             sessionToken = controller.sessionToken,
             appLabel = appLabel,
-            title = metadata?.getString(MediaMetadata.METADATA_KEY_TITLE).orEmpty(),
-            artist = metadata?.getString(MediaMetadata.METADATA_KEY_ARTIST).orEmpty(),
-            album = metadata?.getString(MediaMetadata.METADATA_KEY_ALBUM).orEmpty(),
+            title = title,
+            artist = artist,
+            album = album,
             albumArt = art,
             isPlaying = playback?.state == PlaybackState.STATE_PLAYING,
             positionMs = playback?.position?.coerceAtLeast(0L) ?: 0L,
             positionAnchorRealtimeMs = SystemClock.elapsedRealtime(),
             playbackSpeed = playback?.playbackSpeed?.takeIf { it > 0f } ?: 1f,
-            durationMs = metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L,
+            durationMs = durationMs,
             queue = queue,
             volumeFraction = volume,
             isRemoteVolume = info.playbackType == MediaController.PlaybackInfo.PLAYBACK_TYPE_REMOTE,
@@ -225,15 +250,99 @@ class MediaSessionRepository(private val app: Application) {
         )
     }
 
+    private data class ResolvedMetadata(
+        val title: String,
+        val artist: String,
+        val album: String,
+        val durationMs: Long,
+        val art: Bitmap?,
+    )
+
+    private fun resolveMetadataAndArtwork(
+        token: android.media.session.MediaSession.Token,
+        packageName: String,
+        metadata: MediaMetadata?,
+        playbackState: Int?,
+    ): ResolvedMetadata = synchronized(cacheLock) {
+        val validCachedArt = cachedArt?.takeIf { !it.isRecycled }
+        val sameSession = cachedSessionToken == token
+
+        if (metadata == null) {
+            val isActiveTransition = sameSession &&
+                cachedKey != null &&
+                playbackState != null &&
+                playbackState != PlaybackState.STATE_NONE &&
+                playbackState != PlaybackState.STATE_STOPPED
+            if (isActiveTransition) {
+                val prevKey = cachedKey!!
+                return@synchronized ResolvedMetadata(
+                    title = prevKey.title,
+                    artist = prevKey.artist,
+                    album = prevKey.album,
+                    durationMs = prevKey.durationMs,
+                    art = validCachedArt,
+                )
+            }
+            cachedSessionToken = token
+            cachedKey = null
+            cachedArt = null
+            return@synchronized ResolvedMetadata("", "", "", 0L, null)
+        }
+
+        val title = metadata.getString(MediaMetadata.METADATA_KEY_TITLE).orEmpty()
+        val artist = metadata.getString(MediaMetadata.METADATA_KEY_ARTIST).orEmpty()
+        val album = metadata.getString(MediaMetadata.METADATA_KEY_ALBUM).orEmpty()
+        val durationMs = metadata.getLong(MediaMetadata.METADATA_KEY_DURATION)
+        val key = MetadataCacheKey(packageName, title, artist, album, durationMs)
+
+        val rawArt: Bitmap? = metadata.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
+            ?: metadata.getBitmap(MediaMetadata.METADATA_KEY_ART)
+
+        val resolvedArt: Bitmap? = when {
+            rawArt != null && !rawArt.isRecycled -> {
+                if (
+                    validCachedArt != null &&
+                    (
+                        rawArt === validCachedArt ||
+                            (
+                                rawArt.width == validCachedArt.width &&
+                                    rawArt.height == validCachedArt.height &&
+                                    rawArt.sameAs(validCachedArt)
+                                )
+                        )
+                ) {
+                    validCachedArt
+                } else {
+                    rawArt
+                }
+            }
+            sameSession && cachedKey == key && title.isNotBlank() -> validCachedArt
+            else -> null
+        }
+
+        cachedSessionToken = token
+        cachedKey = key
+        cachedArt = resolvedArt
+
+        ResolvedMetadata(title, artist, album, durationMs, resolvedArt)
+    }
+
     /**
-     * Priorité : une session en lecture avec un titre, puis n'importe quelle session avec titre,
-     * puis une session en lecture, puis la première. Les appels téléphoniques sont ignorés.
+     * Priorité : une session en lecture avec un titre, puis la session active courante si
+     * elle reste pertinente (évite de basculer vers une autre session en pause), puis n'importe
+     * quelle session avec titre, puis une session en lecture, puis la première.
      */
     private fun pickController(sessions: List<MediaController>): MediaController? {
         val playing = sessions.filter { it.playbackState?.state == PlaybackState.STATE_PLAYING }
+        val activeToken = activeController?.sessionToken
+        val currentActive = activeToken?.let { token ->
+            sessions.firstOrNull { it.sessionToken == token }
+        }
         return playing.firstOrNull(::isRelevant)
+            ?: currentActive?.takeIf(::isRelevant)
             ?: sessions.firstOrNull(::isRelevant)
             ?: playing.firstOrNull()
+            ?: currentActive
             ?: sessions.firstOrNull()
     }
 

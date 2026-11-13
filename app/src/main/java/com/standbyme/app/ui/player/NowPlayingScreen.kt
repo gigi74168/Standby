@@ -42,6 +42,7 @@ import com.standbyme.app.ui.components.PlayPauseButton
 import com.standbyme.app.ui.components.RoundIconButton
 import com.standbyme.app.ui.components.WavySlider
 import com.standbyme.app.ui.components.formatDuration
+import com.standbyme.app.ui.components.rememberCutoutSafeHorizontalPadding
 
 /** Lecteur « classique » (Material You) avec halo et barre ondulée. */
 @Composable
@@ -60,11 +61,19 @@ fun NowPlayingScreen(
     onOpenOutputPicker: () -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
+    val contentPadding = rememberCutoutSafeHorizontalPadding(
+        baseStart = 34.dp,
+        baseEnd = 34.dp,
+        extraCutoutClearance = 14.dp,
+        extraStartWhenNoCutout = 10.dp,
+        top = 30.dp,
+        bottom = 30.dp,
+    )
     Row(
         Modifier
             .fillMaxSize()
             .background(colors.surface, RoundedCornerShape(30.dp))
-            .padding(horizontal = 34.dp, vertical = 30.dp),
+            .padding(contentPadding),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (!playback.hasSession) {

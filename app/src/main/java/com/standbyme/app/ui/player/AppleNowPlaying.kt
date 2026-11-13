@@ -1,136 +1,65 @@
 package com.standbyme.app.ui.player
 
 import android.graphics.Bitmap
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandHorizontally
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkHorizontally
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.FastForward
-import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Speaker
-import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.rotate
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.standbyme.app.R
 import com.standbyme.app.media.PlaybackUiState
 import com.standbyme.app.ui.components.formatDuration
+import com.standbyme.app.ui.components.rememberCutoutSafeHorizontalPadding
 import com.standbyme.app.ui.theme.Nunito
-import kotlinx.coroutines.delay
-import kotlin.math.sqrt
 
 private val AppleWhite = Color(0xFFF0F0ED)
 private val AppleSecondary = Color.White.copy(alpha = 0.45f)
-private val AppleTrack = Color.White.copy(alpha = 0.5f)
-
-/**
- * Fond flouté : deux copies de la pochette, agrandies et tournant lentement en sens
- * inverse, sous un flou fort. Sans pochette : dégradé de la couleur principale.
- */
-@Composable
-fun AppleBackdrop(art: Bitmap?, isPlaying: Boolean, fallbackColor: Color, modifier: Modifier = Modifier) {
-    val rotation by rememberInfiniteTransition(label = "backdrop").animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(tween(90_000, easing = LinearEasing)),
-        label = "backdropRotation",
-    )
-    val image = remember(art) { art?.asImageBitmap() }
-    Crossfade(targetState = image, animationSpec = tween(900), label = "appleBackdrop", modifier = modifier) { bmp ->
-        Canvas(
-            Modifier
-                .fillMaxSize()
-                .blur(80.dp),
-        ) {
-            if (bmp == null) {
-                drawRect(Brush.verticalGradient(listOf(fallbackColor.copy(alpha = 0.55f), Color.Black)))
-            } else {
-                val diagonal = sqrt(size.width * size.width + size.height * size.height)
-                val angle = if (isPlaying) rotation else 0f
-                drawRotatedArt(bmp, diagonal * 1.25f, angle, 1f)
-                drawRotatedArt(bmp, diagonal * 1.6f, 140f - angle, 0.5f)
-            }
-            drawRect(Color.Black.copy(alpha = 0.32f))
-        }
-    }
-}
-
-private fun DrawScope.drawRotatedArt(bmp: ImageBitmap, side: Float, degrees: Float, alpha: Float) {
-    rotate(degrees) {
-        val s = side.toInt()
-        drawImage(
-            image = bmp,
-            srcOffset = IntOffset.Zero,
-            srcSize = IntSize(bmp.width, bmp.height),
-            dstOffset = IntOffset((center.x - side / 2f).toInt(), (center.y - side / 2f).toInt()),
-            dstSize = IntSize(s, s),
-            alpha = alpha,
-        )
-    }
-}
 
 /** Mise en page du lecteur « design Apple » (pochette à gauche, infos et commandes à droite). */
 @Composable
@@ -144,20 +73,26 @@ fun AppleNowPlaying(
     onSetVolume: (Float) -> Unit,
     onOpenOutputPicker: () -> Unit,
 ) {
+    val gutter = 44.dp
+    val safePadding = rememberCutoutSafeHorizontalPadding(
+        baseStart = gutter,
+        baseEnd = gutter,
+        extraCutoutClearance = 14.dp,
+        extraStartWhenNoCutout = 12.dp,
+    )
     if (!playback.hasSession) {
-        AppleEmpty()
+        AppleEmpty(safePadding)
         return
     }
     val context = LocalContext.current
     val listeningOn = remember(playback.isRemoteVolume, playback.packageName) {
         listeningOnLabel(context, playback.isRemoteVolume)
     }
-    val gutter = 44.dp
 
     Row(
         Modifier
             .fillMaxSize()
-            .padding(horizontal = gutter),
+            .padding(safePadding),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         AppleArtwork(playback.albumArt, playback.isPlaying, 260.dp)
@@ -165,16 +100,16 @@ fun AppleNowPlaying(
         Column(
             Modifier
                 .weight(1f)
-                .height(260.dp),
-            verticalArrangement = Arrangement.SpaceBetween,
+                .heightIn(min = 260.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically),
         ) {
             AppleTopBar(playback, onSetVolume, onOpenOutputPicker)
             Column {
                 Text(
                     playback.title,
                     color = AppleWhite,
-                    fontSize = 42.sp,
-                    lineHeight = 50.sp,
+                    fontSize = 36.sp,
+                    lineHeight = 42.sp,
                     fontWeight = FontWeight.ExtraBold,
                     fontFamily = Nunito,
                     maxLines = 1,
@@ -184,18 +119,36 @@ fun AppleNowPlaying(
                     listOf(playback.artist, playback.album).filter { it.isNotBlank() }.joinToString(" • "),
                     modifier = Modifier.fillMaxWidth(),
                     color = AppleSecondary,
-                    fontSize = 23.sp,
-                    lineHeight = 28.sp,
+                    fontSize = 20.sp,
+                    lineHeight = 25.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = Nunito,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Text(listeningOn, color = AppleSecondary, fontSize = 14.sp, fontFamily = Nunito, fontWeight = FontWeight.Bold)
+                Text(
+                    listeningOn,
+                    color = AppleSecondary,
+                    fontSize = 13.sp,
+                    lineHeight = 16.sp,
+                    fontFamily = Nunito,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 AppleSkipButton(forward = false, onClick = onPrevious)
-                ApplePlayPause(playback.isPlaying, onTogglePlay)
+                ApplePlayPauseButton(
+                    isPlaying = playback.isPlaying,
+                    onClick = onTogglePlay,
+                    buttonSize = 72.dp,
+                    iconSize = 34.dp,
+                )
                 AppleSkipButton(forward = true, onClick = onNext)
             }
             AppleProgress(playback, positionMs, onSeek)
@@ -204,9 +157,11 @@ fun AppleNowPlaying(
 }
 
 @Composable
-private fun AppleEmpty() {
+private fun AppleEmpty(safePadding: PaddingValues) {
     Column(
-        Modifier.fillMaxSize(),
+        Modifier
+            .fillMaxSize()
+            .padding(safePadding),
         verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -218,11 +173,16 @@ private fun AppleEmpty() {
 
 /** Pochette qui « respire » : plus grande et plus d'ombre en lecture, réduite en pause. */
 @Composable
-private fun AppleArtwork(art: Bitmap?, isPlaying: Boolean, size: androidx.compose.ui.unit.Dp) {
+private fun AppleArtwork(art: Bitmap?, isPlaying: Boolean, size: Dp) {
     val scale by animateFloatAsState(if (isPlaying) 1f else 0.86f, spring(0.62f, 220f), label = "appleArtScale")
     val shadow by animateDpAsState(if (isPlaying) 24.dp else 8.dp, spring(stiffness = 220f), label = "appleArtShadow")
     val shape = RoundedCornerShape(18.dp)
-    val image = remember(art) { art?.asImageBitmap() }
+    val safeArt = art?.takeIf { !it.isRecycled && it.width > 0 && it.height > 0 }
+    val image = remember(safeArt) {
+        safeArt?.takeIf { !it.isRecycled }?.let { bmp ->
+            runCatching { bmp.asImageBitmap() }.getOrNull()
+        }
+    }
     Box(
         Modifier
             .size(size)
@@ -241,126 +201,6 @@ private fun AppleArtwork(art: Bitmap?, isPlaying: Boolean, size: androidx.compos
                 }
             }
         }
-    }
-}
-
-/** Ligne du haut : bouton volume (qui déplie un curseur) et bouton sortie audio. */
-@Composable
-private fun AppleTopBar(playback: PlaybackUiState, onSetVolume: (Float) -> Unit, onOpenOutputPicker: () -> Unit) {
-    var volumeOpen by remember { mutableStateOf(false) }
-    var lastTouch by remember { mutableStateOf(0) }
-
-    // Le curseur de volume se replie tout seul après 3 s sans interaction.
-    LaunchedEffect(volumeOpen, lastTouch) {
-        if (volumeOpen) {
-            delay(3_000)
-            volumeOpen = false
-        }
-    }
-
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .height(56.dp),
-        horizontalArrangement = Arrangement.End,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        AnimatedVisibility(
-            visible = volumeOpen,
-            enter = fadeIn() + expandHorizontally(expandFrom = Alignment.End),
-            exit = fadeOut() + shrinkHorizontally(shrinkTowards = Alignment.End),
-        ) {
-            AppleBar(
-                fraction = playback.volumeFraction,
-                onChange = {
-                    lastTouch++
-                    if (playback.canAdjustVolume) onSetVolume(it)
-                },
-                modifier = Modifier
-                    .width(220.dp)
-                    .padding(end = 12.dp),
-            )
-        }
-        AppleCircleButton(56.dp, stringResource(R.string.volume), onClick = { volumeOpen = !volumeOpen }) {
-            Icon(Icons.Filled.VolumeUp, null, Modifier.size(26.dp), tint = AppleWhite)
-        }
-        Spacer(Modifier.width(12.dp))
-        AppleCircleButton(56.dp, stringResource(R.string.output_picker), onClick = onOpenOutputPicker) {
-            Icon(Icons.Filled.Speaker, null, Modifier.size(26.dp), tint = AppleWhite)
-        }
-    }
-}
-
-/** Bouton rond translucide qui s'éclaircit à l'appui. */
-@Composable
-private fun AppleCircleButton(
-    size: androidx.compose.ui.unit.Dp,
-    contentDescription: String,
-    onClick: () -> Unit,
-    content: @Composable () -> Unit,
-) {
-    val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
-    val glow by animateFloatAsState(if (pressed) 1f else 0f, label = "applePress")
-    Box(
-        Modifier
-            .size(size)
-            .clip(CircleShape)
-            .background(Color.White.copy(alpha = 0.14f + glow * 0.16f))
-            .clickable(interactionSource = interaction, indication = null, onClickLabel = contentDescription, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) { content() }
-}
-
-@Composable
-private fun ApplePlayPause(isPlaying: Boolean, onClick: () -> Unit) {
-    val morph by animateFloatAsState(if (isPlaying) 1f else 0f, spring(0.72f, 420f), label = "applePlayPause")
-    val label = stringResource(if (isPlaying) R.string.pause else R.string.play)
-    AppleCircleButton(100.dp, label, onClick) {
-        Box(contentAlignment = Alignment.Center) {
-            Icon(
-                Icons.Filled.Pause, null,
-                Modifier
-                    .size(64.dp)
-                    .graphicsLayer { alpha = morph; scaleX = 0.6f + 0.4f * morph; scaleY = scaleX },
-                tint = AppleWhite,
-            )
-            Icon(
-                Icons.Filled.PlayArrow, null,
-                Modifier
-                    .size(64.dp)
-                    .graphicsLayer { alpha = 1f - morph; scaleX = 1f - 0.4f * morph; scaleY = scaleX },
-                tint = AppleWhite,
-            )
-        }
-    }
-}
-
-@Composable
-private fun AppleSkipButton(forward: Boolean, onClick: () -> Unit) {
-    val label = stringResource(if (forward) R.string.next else R.string.previous)
-    var nudge by remember { mutableStateOf(0) }
-    val shift by animateFloatAsState(if (nudge % 2 == 1) 1f else 0f, spring(0.5f, 600f), label = "appleSkip")
-    Box(
-        Modifier
-            .size(width = 88.dp, height = 66.dp)
-            .clip(RoundedCornerShape(33.dp))
-            .pointerInput(onClick) {
-                detectTapGestures(onTap = {
-                    nudge++
-                    onClick()
-                })
-            },
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            if (forward) Icons.Filled.FastForward else Icons.Filled.FastRewind,
-            contentDescription = label,
-            modifier = Modifier
-                .size(48.dp)
-                .graphicsLayer { translationX = (if (forward) 1 else -1) * shift * 10.dp.toPx() },
-            tint = AppleWhite,
-        )
     }
 }
 
@@ -386,17 +226,53 @@ private fun AppleTime(text: String) {
 @Composable
 private fun AppleBar(fraction: Float, onChange: (Float) -> Unit, modifier: Modifier = Modifier) {
     var touching by remember { mutableStateOf(false) }
+    var dragFraction by remember { mutableStateOf<Float?>(null) }
+    val currentOnChange by rememberUpdatedState(onChange)
+
     val barHeight by animateDpAsState(if (touching) 18.dp else 10.dp, spring(0.7f, 600f), label = "appleBarHeight")
-    val alpha by animateFloatAsState(if (touching) 0.9f else 1f, label = "appleBarAlpha")
+    val fillAlpha by animateFloatAsState(if (touching) 0.95f else 0.84f, tween(120), label = "appleBarAlpha")
+    val animatedFraction by animateFloatAsState(
+        targetValue = fraction.coerceIn(0f, 1f),
+        animationSpec = spring(dampingRatio = 0.9f, stiffness = 500f),
+        label = "appleBarFraction",
+    )
+    val displayFraction = (dragFraction ?: animatedFraction).coerceIn(0f, 1f)
+
     Box(
         modifier
             .height(24.dp)
             .pointerInput(Unit) {
-                awaitPointerEventScopeLoop(
-                    onDown = { touching = true; onChange((it / size.width).coerceIn(0f, 1f)) },
-                    onMove = { onChange((it / size.width).coerceIn(0f, 1f)) },
-                    onUp = { touching = false },
-                )
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    down.consume()
+                    touching = true
+                    if (size.width > 0) {
+                        val initial = (down.position.x / size.width.toFloat()).coerceIn(0f, 1f)
+                        dragFraction = initial
+                        currentOnChange(initial)
+                    }
+                    try {
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull { it.id == down.id }
+                                ?: event.changes.firstOrNull()
+                                ?: break
+                            if (!change.pressed) {
+                                change.consume()
+                                break
+                            }
+                            if (size.width > 0) {
+                                val next = (change.position.x / size.width.toFloat()).coerceIn(0f, 1f)
+                                dragFraction = next
+                                currentOnChange(next)
+                            }
+                            event.changes.forEach { it.consume() }
+                        }
+                    } finally {
+                        touching = false
+                        dragFraction = null
+                    }
+                }
             },
         contentAlignment = Alignment.CenterStart,
     ) {
@@ -407,36 +283,13 @@ private fun AppleBar(fraction: Float, onChange: (Float) -> Unit, modifier: Modif
                 .clip(CircleShape)
                 .background(Color.White.copy(alpha = 0.18f)),
         ) {
-            Box(
-                Modifier
-                    .fillMaxHeight()
-                    .fillMaxWidth(fraction.coerceIn(0f, 1f))
-                    .background(AppleTrack.copy(alpha = AppleTrack.alpha * alpha + 0.4f)),
-            )
-        }
-    }
-}
-
-/** Boucle de gestes simple : appui, déplacement, relâchement (coordonnée X). */
-private suspend fun androidx.compose.ui.input.pointer.PointerInputScope.awaitPointerEventScopeLoop(
-    onDown: (Float) -> Unit,
-    onMove: (Float) -> Unit,
-    onUp: () -> Unit,
-) {
-    awaitPointerEventScope {
-        while (true) {
-            val down = awaitPointerEvent().changes.firstOrNull { it.pressed } ?: continue
-            onDown(down.position.x)
-            down.consume()
-            while (true) {
-                val event = awaitPointerEvent()
-                val change = event.changes.firstOrNull() ?: break
-                if (!change.pressed) {
-                    onUp()
-                    break
-                }
-                onMove(change.position.x)
-                change.consume()
+            if (displayFraction > 0.002f) {
+                Box(
+                    Modifier
+                        .fillMaxHeight()
+                        .fillMaxWidth(displayFraction)
+                        .background(AppleWhite.copy(alpha = fillAlpha), CircleShape),
+                )
             }
         }
     }

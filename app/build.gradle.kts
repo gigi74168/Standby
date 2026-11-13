@@ -21,8 +21,8 @@ android {
         applicationId = "com.standbyme.app"
         minSdk = 31
         targetSdk = 35
-        versionCode = 12
-        versionName = "1.6.1"
+        versionCode = 13
+        versionName = "1.7"
     }
 
     signingConfigs {

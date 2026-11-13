@@ -10,10 +10,10 @@ dans l'esprit du mode StandBy de l'iPhone : grande horloge, lecteur de musique, 
 
 ## Télécharger
 
-L'APK prêt à installer est dans le dépôt : [`release/StandByMe-1.6.1.apk`](release/StandByMe-1.6.1.apk).
+L'APK prêt à installer est dans le dépôt : [`release/StandByMe-1.7.apk`](release/StandByMe-1.7.apk).
 
 Il est signé avec une **clé de test** (pas la clé d'origine, perdue avec le disque) :
-il faut désinstaller l'ancienne 1.6.1 avant de l'installer.
+il faut désinstaller l'ancienne version avant de l'installer.
 
 ## Fonctionnalités
 

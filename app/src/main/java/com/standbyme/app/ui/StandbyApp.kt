@@ -9,7 +9,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -47,6 +50,7 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -59,6 +63,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.standbyme.app.R
 import com.standbyme.app.ui.clock.ClockScreen
 import com.standbyme.app.ui.clock.ClockStyle
+import com.standbyme.app.ui.components.rememberCutoutSafeHorizontalPadding
 import com.standbyme.app.ui.player.PlayerPage
 import com.standbyme.app.ui.settings.SettingsPanel
 import com.standbyme.app.ui.theme.NightFilterRed
@@ -126,8 +131,18 @@ fun StandbyApp(viewModel: StandbyViewModel = viewModel()) {
                 }
             },
     ) {
+        val clockPadding = rememberCutoutSafeHorizontalPadding(
+            baseStart = 24.dp,
+            baseEnd = 24.dp,
+            top = 24.dp,
+            bottom = 24.dp,
+        )
         HorizontalPager(pager, Modifier.fillMaxSize()) { page ->
-            val pad = if (appleDesign && page == PAGE_WIDGETS) 0.dp else 24.dp
+            val pad = when {
+                appleDesign && page == PAGE_WIDGETS -> PaddingValues(0.dp)
+                page == PAGE_CLOCK -> clockPadding
+                else -> PaddingValues(24.dp)
+            }
             Box(
                 Modifier
                     .fillMaxSize()
@@ -184,11 +199,16 @@ fun StandbyApp(viewModel: StandbyViewModel = viewModel()) {
 
         // Petite heure en haut à droite quand l'horloge n'est pas affichée en grand.
         if (pager.currentPage != PAGE_CLOCK) {
+            val layoutDirection = LocalLayoutDirection.current
+            val clockEnd = rememberCutoutSafeHorizontalPadding(
+                baseStart = 0.dp,
+                baseEnd = 30.dp,
+            ).calculateEndPadding(layoutDirection)
             Text(
                 String.format(Locale.ROOT, "%d:%02d", now.hour, now.minute),
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(top = 20.dp, end = 30.dp),
+                    .padding(top = 20.dp, end = clockEnd),
                 color = colors.onBackground.copy(alpha = 0.55f),
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Medium,
@@ -260,10 +280,19 @@ private fun BoxScope.EdgeArrow(
     onClick: () -> Unit,
 ) {
     val start = alignment == Alignment.CenterStart
+    val layoutDirection = LocalLayoutDirection.current
+    val safePadding = rememberCutoutSafeHorizontalPadding(
+        baseStart = 2.dp,
+        baseEnd = 2.dp,
+        extraCutoutClearance = 6.dp,
+    )
     Box(
         Modifier
             .align(alignment)
-            .padding(start = if (start) 2.dp else 0.dp, end = if (start) 0.dp else 2.dp)
+            .padding(
+                start = if (start) safePadding.calculateStartPadding(layoutDirection) else 0.dp,
+                end = if (start) 0.dp else safePadding.calculateEndPadding(layoutDirection),
+            )
             .clip(RoundedCornerShape(16.dp))
             .clickable(enabled = visible, onClick = onClick)
             .size(width = 28.dp, height = 54.dp),
@@ -284,10 +313,25 @@ private fun BoxScope.CornerButton(
     onClick: () -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
+    val layoutDirection = LocalLayoutDirection.current
+    val safePadding = rememberCutoutSafeHorizontalPadding(
+        baseStart = 18.dp,
+        baseEnd = 18.dp,
+    )
+    val startPad = if (alignment == Alignment.TopStart || alignment == Alignment.BottomStart) {
+        safePadding.calculateStartPadding(layoutDirection)
+    } else {
+        18.dp
+    }
+    val endPad = if (alignment == Alignment.TopEnd || alignment == Alignment.BottomEnd) {
+        safePadding.calculateEndPadding(layoutDirection)
+    } else {
+        18.dp
+    }
     Box(
         Modifier
             .align(alignment)
-            .padding(18.dp)
+            .padding(start = startPad, top = 18.dp, end = endPad, bottom = 18.dp)
             .clip(CircleShape)
             .background(if (active) colors.primary.copy(alpha = 0.25f) else Color.Transparent)
             .clickable(onClick = onClick)

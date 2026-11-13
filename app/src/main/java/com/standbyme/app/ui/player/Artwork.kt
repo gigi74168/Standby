@@ -32,23 +32,34 @@ import com.standbyme.app.media.PlaybackUiState
  * et luminosité recadrées pour donner un halo lumineux mais jamais criard.
  */
 fun dominantAuraColor(bitmap: Bitmap): Color {
-    val small = Bitmap.createScaledBitmap(bitmap, 10, 10, true)
-    val pixels = IntArray(100)
-    small.getPixels(pixels, 0, 10, 0, 0, 10, 10)
-    if (small !== bitmap) small.recycle()
-    var r = 0L
-    var g = 0L
-    var b = 0L
-    for (p in pixels) {
-        r += (p shr 16) and 0xFF
-        g += (p shr 8) and 0xFF
-        b += p and 0xFF
+    if (bitmap.isRecycled || bitmap.width <= 0 || bitmap.height <= 0) return Color.Black
+    return try {
+        val source = if (bitmap.config == Bitmap.Config.HARDWARE) {
+            bitmap.copy(Bitmap.Config.ARGB_8888, false) ?: return Color.Black
+        } else {
+            bitmap
+        }
+        val small = Bitmap.createScaledBitmap(source, 10, 10, true)
+        val pixels = IntArray(100)
+        small.getPixels(pixels, 0, 10, 0, 0, 10, 10)
+        if (small !== source) small.recycle()
+        if (source !== bitmap) source.recycle()
+        var r = 0L
+        var g = 0L
+        var b = 0L
+        for (p in pixels) {
+            r += (p shr 16) and 0xFF
+            g += (p shr 8) and 0xFF
+            b += p and 0xFF
+        }
+        val hsv = FloatArray(3)
+        android.graphics.Color.RGBToHSV((r / 100).toInt(), (g / 100).toInt(), (b / 100).toInt(), hsv)
+        hsv[1] = (hsv[1] * 1.4f).coerceIn(0.35f, 1f)
+        hsv[2] = hsv[2].coerceIn(0.45f, 0.95f)
+        Color(android.graphics.Color.HSVToColor(hsv))
+    } catch (_: Exception) {
+        Color.Black
     }
-    val hsv = FloatArray(3)
-    android.graphics.Color.RGBToHSV((r / 100).toInt(), (g / 100).toInt(), (b / 100).toInt(), hsv)
-    hsv[1] = (hsv[1] * 1.4f).coerceIn(0.35f, 1f)
-    hsv[2] = hsv[2].coerceIn(0.45f, 0.95f)
-    return Color(android.graphics.Color.HSVToColor(hsv))
 }
 
 /** Pochette arrondie, avec éventuellement un halo coloré flouté derrière. */
@@ -61,8 +72,9 @@ fun ArtworkWithAura(
     useAlbumColor: Boolean,
 ) {
     val colors = MaterialTheme.colorScheme
-    val art = playback.albumArt
-    val albumColor = remember(art) { art?.let(::dominantAuraColor) }
+    val art = playback.albumArt?.takeIf { !it.isRecycled && it.width > 0 && it.height > 0 }
+    val albumColor = remember(art) { art?.takeIf { !it.isRecycled }?.let(::dominantAuraColor) }
+    val image = remember(art) { art?.takeIf { !it.isRecycled }?.let { runCatching { it.asImageBitmap() }.getOrNull() } }
     val aura: Color? = when {
         !auraEnabled -> null
         useAlbumColor -> albumColor ?: colors.primary
@@ -89,9 +101,9 @@ fun ArtworkWithAura(
                 .background(colors.primaryContainer),
             contentAlignment = Alignment.Center,
         ) {
-            if (art != null) {
+            if (image != null) {
                 Image(
-                    bitmap = remember(art) { art.asImageBitmap() },
+                    bitmap = image,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
