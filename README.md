@@ -3,17 +3,32 @@
 Une application Android qui transforme ton téléphone posé à l'horizontale en écran de veille,
 dans l'esprit du mode StandBy de l'iPhone : grande horloge, lecteur de musique, mode nuit.
 
-> **Version 1.6.1 reconstruite.** Le code source d'origine a été perdu (panne de disque).
-> Ce projet a été réécrit proprement à partir de l'APK release 1.6.1 décompilé
+> **Version actuelle : 1.7.** Le code source d'origine a été perdu (panne de disque).
+> Le projet a d'abord été réécrit proprement à partir de l'APK release 1.6.1 décompilé
 > (comportement, textes, couleurs, polices et icône repris à l'identique ;
-> noms de classes et organisation des fichiers recréés, car R8 les avait effacés).
+> noms de classes et organisation des fichiers recréés, car R8 les avait effacés),
+> puis amélioré en 1.7.
 
 ## Télécharger
 
-L'APK prêt à installer est dans le dépôt : [`release/StandByMe-1.7.apk`](release/StandByMe-1.7.apk).
+| Version | APK |
+|---------|-----|
+| **1.7** (recommandée) | [`release/StandByMe-1.7.apk`](release/StandByMe-1.7.apk) |
+| 1.6.1 reconstruite | [`release/StandByMe-1.6.1.apk`](release/StandByMe-1.6.1.apk) |
 
-Il est signé avec une **clé de test** (pas la clé d'origine, perdue avec le disque) :
-il faut désinstaller l'ancienne version avant de l'installer.
+Ces APK sont signés avec des **clés de test** (pas la clé d'origine, perdue avec le disque),
+et chacun avec une clé différente : désinstalle toute version de StandByMe déjà présente
+avant d'en installer une autre.
+
+## Nouveautés de la 1.7
+
+- La pochette ne passe plus sous la caméra à poinçon (prise en compte de l'encoche, Pixel 10 compris).
+- Design Apple : nouvelles icônes Lecture/Pause/Précédent/Suivant arrondies et boutons en verre dépoli.
+- Bouton Lecture/Pause redimensionné : son halo ne touche plus la barre de progression.
+- Barre du haut repensée : icônes haut-parleur et sortie audio, curseur de volume en capsule
+  façon Centre de contrôle.
+- Lecture plus stable : pochettes mises en cache, choix de la session active fiabilisé,
+  fond animé figé proprement en pause, plus de clignotement du flou.
 
 ## Fonctionnalités
 
@@ -53,8 +68,8 @@ app/src/main/java/com/standbyme/app/
     └── theme/                       Couleurs dynamiques, polices
 ```
 
-Les réglages gardent **les mêmes clés** qu'en 1.6.1 : si tu installes cette version par-dessus
-l'ancienne (même signature), tes réglages sont conservés.
+Les réglages gardent **les mêmes clés** depuis la 1.6.1 : si tu installes une nouvelle version
+par-dessus l'ancienne (même signature), tes réglages sont conservés.
 
 ## Compiler
 
@@ -87,8 +102,8 @@ keyPassword=...
 ./gradlew :app:assembleRelease
 ```
 
-Sans la clé d'origine, Android refusera d'installer la nouvelle version par-dessus l'ancienne :
-il faudra désinstaller la 1.6.1 d'abord.
+Sans la clé d'origine, Android refusera d'installer la nouvelle version par-dessus la 1.6.1
+d'origine : il faudra la désinstaller d'abord.
 
 ## Licences des polices
 
